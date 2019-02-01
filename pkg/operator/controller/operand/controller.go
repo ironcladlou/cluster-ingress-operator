@@ -281,7 +281,7 @@ func (c *Controller) getCurrentWildcardCert(ci *v1alpha1.ClusterIngress) (*corev
 
 func (c *Controller) getCurrentDeployment(ci *v1alpha1.ClusterIngress) (*appsv1.Deployment, error) {
 	obj := &appsv1.Deployment{}
-	err := c.client.Get(context.TODO(), wildcardCertName(c.operandNamespace, ci.Name), obj)
+	err := c.client.Get(context.TODO(), deploymentName(c.operandNamespace, ci.Name), obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil, nil
@@ -352,6 +352,11 @@ func getRouterDeploymentChanges(current, desired *graph, deleted bool) (changes 
 	}
 	if current.deployment == nil {
 		changes = append(changes, &support.CreateResource{Object: desired.deployment, Owner: desired.sa})
+		return
+	}
+	currentReplicas, desiredReplicas := current.deployment.Spec.Replicas, desired.deployment.Spec.Replicas
+	if currentReplicas != nil && desiredReplicas != nil && currentReplicas != desiredReplicas {
+		changes = append(changes, &support.ScaleResource{Object: desired.deployment, Replicas: *desiredReplicas})
 	}
 	return
 }

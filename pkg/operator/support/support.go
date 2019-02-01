@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/openshift/cluster-ingress-operator/pkg/apis"
 	"github.com/openshift/cluster-ingress-operator/pkg/util/slice"
 
-	configv1 "github.com/openshift/api/config/v1"
+	appsv1 "k8s.io/api/apps/v1"
 
-	"github.com/sirupsen/logrus"
+	configv1 "github.com/openshift/api/config/v1"
 
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -22,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -103,7 +104,7 @@ func (c *CreateResource) Apply(cl client.Client) error {
 		objAccessor.SetOwnerReferences([]metav1.OwnerReference{*ownerRef})
 	}
 
-	logrus.Infof("createResource: %v", spew.Sdump(obj))
+	logrus.Infof("CreateResource: %v", spew.Sdump(obj))
 	err := cl.Create(context.TODO(), obj)
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
@@ -131,7 +132,7 @@ type DeleteResource struct {
 
 func (c *DeleteResource) Apply(cl client.Client) error {
 	obj := c.Object.DeepCopyObject()
-	logrus.Infof("deleteResource: %v", spew.Sdump(obj))
+	logrus.Infof("DeleteResource: %v", spew.Sdump(obj))
 	return cl.Delete(context.TODO(), obj)
 }
 
@@ -178,7 +179,7 @@ func (c *FinalizeResource) Apply(cl client.Client) error {
 			return err
 		}
 	}
-	logrus.Infof("finalizeResource: finalized %v", spew.Sdump(obj))
+	logrus.Infof("FinalizeResource: finalized %v", spew.Sdump(obj))
 	return nil
 }
 
@@ -188,6 +189,27 @@ func (c *FinalizeResource) String() string {
 		objKey = types.NamespacedName{Namespace: "<unknown>", Name: "<unknown>"}
 	}
 	return fmt.Sprintf("FinalizeResource[object: %s, finalizer: %s: actions: %d]", objKey, c.Finalizer, len(c.Actions))
+}
+
+type ScaleResource struct {
+	// TODO: Make this generic
+	Object   *appsv1.Deployment
+	Replicas int32
+}
+
+func (c *ScaleResource) Apply(cl client.Client) error {
+	obj := c.Object.DeepCopyObject().(*appsv1.Deployment)
+	obj.Spec.Replicas = &c.Replicas
+	logrus.Infof("ScaleResource: %v", spew.Sdump(obj))
+	return cl.Update(context.TODO(), obj)
+}
+
+func (c *ScaleResource) String() string {
+	objKey, err := client.ObjectKeyFromObject(c.Object)
+	if err != nil {
+		objKey = types.NamespacedName{Namespace: "<unknown>", Name: "<unknown>"}
+	}
+	return fmt.Sprintf("ScaleResource[object: %s]", objKey)
 }
 
 func ObjectKeyFromObject(obj runtime.Object) client.ObjectKey {
