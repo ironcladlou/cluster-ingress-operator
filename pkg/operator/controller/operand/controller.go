@@ -103,6 +103,16 @@ func (c *Controller) Reconcile(request reconcile.Request) (reconcile.Result, err
 			return reconcile.Result{}, fmt.Errorf("failed to apply change to %s: %v", request, err)
 		}
 	}
+
+	observed := ci.DeepCopyObject().(*v1alpha1.ClusterIngress)
+	observed.Status.ObservedGeneration = observed.Generation
+	err = c.client.Status().Update(context.TODO(), observed)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to record generation %d: %v", observed.Generation, err)
+	} else {
+		logrus.Infof("recorded new generation %d for %s", observed.Generation, request)
+	}
+
 	return reconcile.Result{}, nil
 }
 
