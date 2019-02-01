@@ -1,5 +1,6 @@
 package clusteringress
 
+/*
 import (
 	"bytes"
 	"context"
@@ -600,3 +601,4 @@ func deploymentConfigChanged(current, expected *appsv1.Deployment) (bool, *appsv
 	updated.Spec.Replicas = &replicas
 	return true, updated
 }
+*/

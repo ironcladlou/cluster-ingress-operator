@@ -1,50 +1,36 @@
 package operator
 
 import (
-	"context"
 	"fmt"
+	"time"
 
-	"github.com/openshift/cluster-ingress-operator/pkg/apis"
+	"github.com/openshift/cluster-ingress-operator/pkg/apis/ingress/v1alpha1"
 	"github.com/openshift/cluster-ingress-operator/pkg/dns"
-	"github.com/openshift/cluster-ingress-operator/pkg/manifests"
-	operatorconfig "github.com/openshift/cluster-ingress-operator/pkg/operator/config"
-	operatorcontroller "github.com/openshift/cluster-ingress-operator/pkg/operator/controller"
-
-	configv1 "github.com/openshift/api/config/v1"
+	operandcontroller "github.com/openshift/cluster-ingress-operator/pkg/operator/controller/operand"
+	operatorcontroller "github.com/openshift/cluster-ingress-operator/pkg/operator/controller/operator"
+	"github.com/openshift/cluster-ingress-operator/pkg/operator/support"
 
 	"github.com/sirupsen/logrus"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-
-	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// scheme contains all the API types necessary for the operator's dynamic
-// clients to work. Any new non-core types must be added here.
-var scheme *runtime.Scheme
-
-func init() {
-	scheme = kscheme.Scheme
-	if err := apis.AddToScheme(scheme); err != nil {
-		panic(err)
-	}
-	if err := configv1.Install(scheme); err != nil {
-		panic(err)
-	}
+// Config is configuration for the operator and should include things like
+// operated images, scheduling configuration, etc.
+type Config struct {
+	// Namespace is the operator namespace.
+	Namespace string
+	// OperandNamespace is the namespace of the component managed by the operator.
+	OperandNamespace string
 }
 
 // Operator is the scaffolding for the ingress operator. It sets up dependencies
@@ -52,72 +38,52 @@ func init() {
 // them together. Operator knows what namespace the operator lives in, and what
 // specific resoure types in other namespaces should produce operator events.
 type Operator struct {
-	manifestFactory *manifests.Factory
-	client          client.Client
+	operatorManager        manager.Manager
+	syncOperatorController chan event.GenericEvent
 
-	manager manager.Manager
-	caches  []cache.Cache
+	config Config
 }
 
 // New creates (but does not start) a new operator from configuration.
-func New(config operatorconfig.Config, dnsManager dns.Manager, kubeConfig *rest.Config) (*Operator, error) {
-	kubeClient, err := Client(kubeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("could't create kube client: %v", err)
-	}
-	mf := manifests.NewFactory(config)
-
-	// Set up an operator manager for the operator namespace.
+func New(config Config, client client.Client, kubeConfig *rest.Config, dnsManager dns.Manager) (*Operator, error) {
 	operatorManager, err := manager.New(kubeConfig, manager.Options{
 		Namespace: config.Namespace,
-		Scheme:    scheme,
+		Scheme:    support.Scheme,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create operator manager: %v", err)
 	}
 
-	// Create and register the operator controller with the operator manager.
-	operatorController, err := operatorcontroller.New(operatorManager, operatorcontroller.Config{
-		Client:          kubeClient,
-		Namespace:       config.Namespace,
-		ManifestFactory: mf,
-		DNSManager:      dnsManager,
+	operatorController, err := controller.New("operator-controller", operatorManager, controller.Options{
+		Reconciler: operatorcontroller.NewController(client, config.Namespace, config.OperandNamespace),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create operator controller: %v", err)
+		return nil, err
+	}
+	syncOperatorController := make(chan event.GenericEvent)
+	operatorController.Watch(
+		&source.Channel{Source: syncOperatorController},
+		&handler.EnqueueRequestForObject{},
+	)
+
+	operandController, err := controller.New("operand-controller", operatorManager, controller.Options{
+		Reconciler: operandcontroller.NewController(client, dnsManager, config.Namespace, config.OperandNamespace),
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = operandController.Watch(&source.Kind{Type: &v1alpha1.ClusterIngress{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return nil, err
 	}
 
-	// Create additional controller event sources from informers in the managed
-	// namespace. Any new managed resources outside the operator's namespace
-	// should be added here.
-	mapper, err := apiutil.NewDiscoveryRESTMapper(kubeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get API Group-Resources")
-	}
-	ingressCache, err := cache.New(kubeConfig, cache.Options{Namespace: "openshift-ingress", Scheme: scheme, Mapper: mapper})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create openshift-ingress cache: %v", err)
-	}
-
-	for _, obj := range []runtime.Object{
-		&appsv1.Deployment{},
-		&corev1.Service{},
-	} {
-		informer, err := ingressCache.GetInformer(obj)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create informer for %v: %v", obj, err)
-		}
-		operatorController.Watch(&source.Informer{Informer: informer}, &handler.EnqueueRequestForObject{})
-	}
+	// TODO: Set up watches for other resources in the operand namespace to queue
+	// events in the operator and operand controllers.
 
 	return &Operator{
-		manager: operatorManager,
-		caches:  []cache.Cache{ingressCache},
-
-		// TODO: These are only needed for the default cluster ingress stuff, which
-		// should be refactored away.
-		manifestFactory: mf,
-		client:          kubeClient,
+		operatorManager:        operatorManager,
+		syncOperatorController: syncOperatorController,
+		config:                 config,
 	}, nil
 }
 
@@ -125,72 +91,45 @@ func New(config operatorconfig.Config, dnsManager dns.Manager, kubeConfig *rest.
 // synchronously until a message is received on the stop channel.
 // TODO: Move the default ClusterIngress logic elsewhere.
 func (o *Operator) Start(stop <-chan struct{}) error {
-	// Ensure the default cluster ingress exists.
-	if err := o.ensureDefaultClusterIngress(); err != nil {
-		return fmt.Errorf("failed to ensure default cluster ingress: %v", err)
-	}
+	logrus.Infof("starting operator")
+	defer func() { logrus.Info("stopping operator") }()
 
 	errChan := make(chan error)
-
-	// Start secondary caches.
-	for _, cache := range o.caches {
-		go func() {
-			if err := cache.Start(stop); err != nil {
-				errChan <- err
-			}
-		}()
-		logrus.Infof("waiting for cache to sync")
-		if !cache.WaitForCacheSync(stop) {
-			return fmt.Errorf("failed to sync cache")
-		}
-		logrus.Infof("cache synced")
-	}
-
-	// Secondary caches are all synced, so start the manager.
 	go func() {
-		errChan <- o.manager.Start(stop)
+		logrus.Infof("starting operator manager")
+		if err := o.operatorManager.Start(stop); err != nil {
+			logrus.Errorf("operator manager returned with an error: %v", err)
+			errChan <- err
+		} else {
+			logrus.Infof("operator manager returned without error")
+		}
 	}()
 
-	// Wait for the manager to exit or a secondary cache to fail.
+	// TODO: Is there some other object we could watch to avoid this?
+	ticker := time.NewTicker(5 * time.Minute)
+	go func() {
+		for range ticker.C {
+			logrus.Infof("forcing operator controller resync")
+			o.syncOperatorController <- getGenericOperatorEvent(o.config.Namespace, "ingress-operator")
+		}
+	}()
+	o.syncOperatorController <- getGenericOperatorEvent(o.config.Namespace, "ingress-operator")
+
+	var err error
 	select {
 	case <-stop:
-		return nil
-	case err := <-errChan:
-		return err
+	case managerErr := <-errChan:
+		err = managerErr
 	}
+	ticker.Stop()
+	return err
 }
 
-// ensureDefaultClusterIngress ensures that a default ClusterIngress exists.
-func (o *Operator) ensureDefaultClusterIngress() error {
-	ci, err := o.manifestFactory.DefaultClusterIngress()
-	if err != nil {
-		return err
+func getGenericOperatorEvent(operatorNamespace, name string) event.GenericEvent {
+	return event.GenericEvent{
+		Meta: &metav1.ObjectMeta{
+			Namespace: operatorNamespace,
+			Name:      name,
+		},
 	}
-	err = o.client.Create(context.TODO(), ci)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	} else if err == nil {
-		logrus.Infof("created default clusteringress %s/%s", ci.Namespace, ci.Name)
-	}
-	return nil
-}
-
-// Client builds an operator-compatible kube client from the given REST config.
-func Client(kubeConfig *rest.Config) (client.Client, error) {
-	managerOptions := manager.Options{
-		Scheme:         scheme,
-		MapperProvider: apiutil.NewDiscoveryRESTMapper,
-	}
-	mapper, err := managerOptions.MapperProvider(kubeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get API Group-Resources")
-	}
-	kubeClient, err := client.New(kubeConfig, client.Options{
-		Scheme: scheme,
-		Mapper: mapper,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kube client: %v", err)
-	}
-	return kubeClient, nil
 }

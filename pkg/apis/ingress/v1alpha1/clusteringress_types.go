@@ -76,6 +76,8 @@ type ClusterIngressHighAvailability struct {
 
 // ClusterIngressStatus defines the observed state of ClusterIngress
 type ClusterIngressStatus struct {
+	ObservedGeneration int64 `json:"observedGeneration"`
+
 	// Replicas is the actual number of observed router instances.
 	Replicas int32 `json:"replicas"`
 

@@ -1,5 +1,6 @@
 package clusteringress
 
+/*
 import (
 	"context"
 	"fmt"
@@ -160,3 +161,4 @@ func computeStatusConditions(conditions []configv1.ClusterOperatorStatusConditio
 
 	return conditions
 }
+*/

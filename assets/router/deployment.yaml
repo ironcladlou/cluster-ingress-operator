@@ -3,8 +3,8 @@
 kind: Deployment
 apiVersion: apps/v1
 metadata:
-  # Name is set at runtime.
-  namespace: openshift-ingress
+  # name is set at runtime.
+  # namespace is set at runtime.
   labels:
     app: router
 spec:
@@ -16,7 +16,7 @@ spec:
       labels:
         app: router
     spec:
-      serviceAccountName: router
+      # serviceAccountName is set at runtime.
       nodeSelector:
         beta.kubernetes.io/os: linux
         node-role.kubernetes.io/worker: ''
