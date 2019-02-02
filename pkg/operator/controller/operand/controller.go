@@ -355,7 +355,7 @@ func getRouterDeploymentChanges(current, desired *graph, deleted bool) (changes 
 		return
 	}
 	currentReplicas, desiredReplicas := current.deployment.Spec.Replicas, desired.deployment.Spec.Replicas
-	if currentReplicas != nil && desiredReplicas != nil && currentReplicas != desiredReplicas {
+	if currentReplicas != nil && desiredReplicas != nil && *currentReplicas != *desiredReplicas {
 		changes = append(changes, &support.ScaleResource{Object: desired.deployment, Replicas: *desiredReplicas})
 	}
 	return
