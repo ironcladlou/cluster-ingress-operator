@@ -116,9 +116,5 @@ func (m *manager) Delete(record *dns.Record) error {
 // getARecordName extracts the ARecord subdomain name from the full domain string.
 // azure defines the ARecord Name as the subdomain name only.
 func getARecordName(recordDomain string, zoneName string) (string, error) {
-	if !strings.HasSuffix(recordDomain, zoneName) {
-		return "", errors.Errorf("the record %s cannot be part of zone %s", recordDomain, zoneName)
-	}
-
 	return strings.TrimSuffix(recordDomain, zoneName), nil
 }

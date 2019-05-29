@@ -73,12 +73,12 @@ func desiredDNSRecords(ci *operatorv1.IngressController, dnsConfig *configv1.DNS
 		zones = append(zones, *dnsConfig.Spec.PublicZone)
 	}
 	for _, ingress := range service.Status.LoadBalancer.Ingress {
-		if len(ingress.Hostname) != 0 {
+		if len(ingress.Hostname) > 0 {
 			for _, zone := range zones {
 				records = append(records, newAliasRecord(name, ingress.Hostname, zone))
 			}
 		}
-		if len(ingress.IP) != 0 {
+		if len(ingress.IP) > 0 {
 			for _, zone := range zones {
 				records = append(records, newARecord(name, ingress.IP, zone))
 			}
