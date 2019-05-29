@@ -39,7 +39,7 @@ func newAliasRecord(domain, target string, zone configv1.DNSZone) *dns.Record {
 func newARecord(domain, target string, zone configv1.DNSZone) *dns.Record {
 	return &dns.Record{
 		Zone: zone,
-		Type: dns.ALIASRecord,
+		Type: dns.ARecordType,
 		ARecord: &dns.ARecord{
 			Domain:  domain,
 			Address: target,
@@ -61,16 +61,6 @@ func desiredDNSRecords(ci *operatorv1.IngressController, dnsConfig *configv1.DNS
 
 	// If the HA type is not cloud, then we don't manage DNS.
 	if ci.Status.EndpointPublishingStrategy.Type != operatorv1.LoadBalancerServiceStrategyType {
-		return records
-	}
-
-	// If no zones are configured, there's nothing to do.
-	if dnsConfig.Spec.PrivateZone == nil && dnsConfig.Spec.PublicZone == nil {
-		return records
-	}
-
-	ingress := service.Status.LoadBalancer.Ingress
-	if len(ingress) == 0 || (len(ingress[0].Hostname) == 0 && len(ingress[0].IP) == 0) {
 		return records
 	}
 

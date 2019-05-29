@@ -58,6 +58,10 @@ func userAgent(operatorReleaseVersion string) string {
 }
 
 func (m *manager) Ensure(record *dns.Record) error {
+	if record.Type != dns.ARecordType {
+		return fmt.Errorf("only A record types are supported")
+	}
+
 	targetZone, err := client.ParseZone(record.Zone.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse zoneID")
