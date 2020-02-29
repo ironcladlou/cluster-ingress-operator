@@ -1,0 +1,23 @@
+{
+  "go.useLanguageServer": true,
+  "[go]": {
+    "editor.snippetSuggestions": "none",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    }
+  },
+  "gopls": {
+    "usePlaceholders": true,
+    "completionDocumentation": true
+  },
+  "go.goroot": "/usr/local/go",
+  "go.toolsEnvVars": {
+    "GO111MODULE": "on",
+    "GOFLAGS": "-mod=vendor",
+    "GOROOT": "/usr/local/go"
+  },
+  "remote.SSH.defaultExtensions": [
+    "ms-vscode.Go"
+  ]
+}

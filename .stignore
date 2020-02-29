@@ -1,0 +1,5 @@
+/okteto.yml
+/.git
+/ingress-operator
+/.vscode/settings.json
+/.vscode/tasks.json

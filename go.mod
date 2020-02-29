@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go v1.15.72
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ghodss/yaml v1.0.0
+	github.com/go-delve/delve v1.4.0 // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
@@ -23,6 +24,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	go.uber.org/zap v1.9.1
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	golang.org/x/tools/gopls v0.3.2 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/fsnotify.v1 v1.4.7

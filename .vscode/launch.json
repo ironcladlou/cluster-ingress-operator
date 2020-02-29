@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ingress-operator/start",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/ingress-operator",
+      "buildFlags": "-mod=vendor",
+      "env": {
+        "GOFLAGS": "-mod=vendor"
+      },
+      "args": [
+        "start"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+namespace: openshift-ingress-operator
+name: ingress-operator
+container: ingress-operator
+image: golang:1.13.8
+workdir: /okteto
+command: ["bash"]
+sshServerPort: 2223
+volumes:
+  - /.vscode-server
+  - /go
+  - /.cache
+  - /.config
